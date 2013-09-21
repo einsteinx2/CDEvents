@@ -97,6 +97,7 @@ extern const CDEventIdentifier kCDEventsSinceEventNow;
 #pragma mark -
 #pragma mark CDEvents Block Type
 @class CDEvents;
+
 /**
  * Type of the block which gets called when an event occurs.
  *
@@ -116,7 +117,23 @@ typedef void (^CDEventsEventBlock)(CDEvents *watcher, CDEvent *event);
  *
  * @since 1.0.0
  */
-@interface CDEvents : NSObject <NSCopying> {}
+@interface CDEvents : NSObject <NSCopying>
+{
+    @private
+    CDEventsEventBlock	_eventBlock;
+    
+    FSEventStreamRef	_eventStream;
+    NSUInteger			_eventStreamCreationFlags;
+    
+    // Property ivars
+    id<CDEventsDelegate> _delegate;
+    CFTimeInterval _notificationLatency;
+    CDEventIdentifier _sinceEventIdentifier;
+    BOOL _ignoreEventsFromSubDirectories;
+    CDEvent *_lastEvent;
+    NSArray *_watchedURLs;
+    NSArray *_excludedURLs;
+}
 
 #pragma mark Properties
 /** @name Managing the Delegate */

@@ -34,10 +34,6 @@
 	#define __has_feature(x) 0
 #endif
 
-#if !__has_feature(objc_arc)
-	#error CDEvents must be built with ARC.
-#endif
-
 #if !__has_feature(blocks)
 	#error CDEvents must be built with support for blocks.
 #endif
@@ -58,13 +54,7 @@ const CDEventIdentifier kCDEventsSinceEventNow = kFSEventStreamEventIdSinceNow;
 #pragma mark -
 #pragma mark Private API
 // Private API
-@interface CDEvents () {
-@private
-	CDEventsEventBlock	_eventBlock;
-	
-	FSEventStreamRef	_eventStream;
-	NSUInteger			_eventStreamCreationFlags;
-}
+@interface CDEvents ()
 
 // Redefine the properties that should be writeable.
 @property (strong, readwrite) CDEvent *lastEvent;
@@ -111,9 +101,14 @@ static void CDEventsCallback(
 #pragma mark Init/dealloc/finalize methods
 - (void)dealloc
 {
+    [super dealloc];
+    
 	[self disposeEventStream];
 	
 	_delegate = nil;
+    [_lastEvent release]; _lastEvent = nil;
+    [_watchedURLs release]; _watchedURLs = nil;
+    [_excludedURLs release]; _excludedURLs = nil;
 }
 
 - (void)finalize
@@ -214,7 +209,7 @@ streamCreationFlags:(CDEventsEventStreamCreationFlags)streamCreationFlags
 	if ((self = [super init])) {
 		_watchedURLs = [URLs copy];
 		_excludedURLs = [exludeURLs copy];
-		_eventBlock = block;
+		_eventBlock = [block copy];
 		
 		_sinceEventIdentifier = sinceEventIdentifier;
 		_eventStreamCreationFlags = streamCreationFlags;
@@ -222,6 +217,7 @@ streamCreationFlags:(CDEventsEventStreamCreationFlags)streamCreationFlags
 		_notificationLatency = notificationLatency;
 		_ignoreEventsFromSubDirectories = ignoreEventsFromSubDirs;
 		
+        [_lastEvent release];
 		_lastEvent = nil;
 		
 		[self createEventStream];
@@ -249,7 +245,7 @@ streamCreationFlags:(CDEventsEventStreamCreationFlags)streamCreationFlags
 							   notificationLantency:[self notificationLatency]
 							ignoreEventsFromSubDirs:[self ignoreEventsFromSubDirectories]
 										excludeURLs:[self excludedURLs]
-								streamCreationFlags:_eventStreamCreationFlags];
+								streamCreationFlags:(unsigned int)_eventStreamCreationFlags];
 	
 	return copy;
 }
@@ -285,7 +281,7 @@ streamCreationFlags:(CDEventsEventStreamCreationFlags)streamCreationFlags
 - (NSString *)streamDescription
 {
 	CFStringRef streamDescriptionCF = FSEventStreamCopyDescription(_eventStream);
-	NSString *returnString = [[NSString alloc] initWithString:(__bridge NSString *)streamDescriptionCF];
+	NSString *returnString = [NSString stringWithString:(__bridge NSString *)streamDescriptionCF];
 	CFRelease(streamDescriptionCF);
 	
 	return returnString;
@@ -297,7 +293,7 @@ streamCreationFlags:(CDEventsEventStreamCreationFlags)streamCreationFlags
 {
 	FSEventStreamContext callbackCtx;
 	callbackCtx.version			= 0;
-	callbackCtx.info			= (__bridge void *)self;
+	callbackCtx.info			= (void *)self;
 	callbackCtx.retain			= NULL;
 	callbackCtx.release			= NULL;
 	callbackCtx.copyDescription	= NULL;
@@ -310,10 +306,10 @@ streamCreationFlags:(CDEventsEventStreamCreationFlags)streamCreationFlags
 	_eventStream = FSEventStreamCreate(kCFAllocatorDefault,
 									   &CDEventsCallback,
 									   &callbackCtx,
-									   (__bridge CFArrayRef)watchedPaths,
+									   (CFArrayRef)watchedPaths,
 									   (FSEventStreamEventId)[self sinceEventIdentifier],
 									   [self notificationLatency],
-									   _eventStreamCreationFlags);
+									   (unsigned int)_eventStreamCreationFlags);
 }
 
 - (void)disposeEventStream
@@ -373,7 +369,7 @@ static void CDEventsCallback(
 		}
 		
 		if (!shouldIgnore) {
-			CDEvent *event = [[CDEvent alloc] initWithIdentifier:identifier date:[NSDate date] URL:eventURL flags:flags];
+			CDEvent *event = [[[CDEvent alloc] initWithIdentifier:(unsigned long)identifier date:[NSDate date] URL:eventURL flags:flags] autorelease];
 			lastEvent = event;
 			
 			CDEventsEventBlock eventBlock = [watcher eventBlock];
